@@ -1,0 +1,118 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.signal import find_peaks
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score, mean_absolute_error
+
+# Load your data (replace with actual .mat loading if needed)
+# Ensure output directory exists
+os.makedirs('/mnt/data', exist_ok=True)
+
+# Load the .mat file
+mat_data = loadmat('part_1.mat')
+
+# Extract the 3 signals from the single object
+ppg = mat_data['p'][0, 0]  # shape (3, 1000)
+ppg_signal = ppg[0, :]     # PPG
+sbp_signal = ppg[1, :]     # SBP
+
+# Step 1: Loading my data
+# Option 1: Loading from a CSV with two columns: PPG, SBP
+
+# df = pd.read_csv('my_data_Monday.csv')
+#ppg_signal = df['PPG'].values
+#sbp_values = df['SBP'].values
+# Each row should represent a single time point (or sample) 
+#from your PPG waveform and its corresponding SBP value.
+
+# Option 2: Manual input for quick tests
+#ppg_signal = np.array([]) # Replace with ppg data
+#sbp_values = np.array([]) # Replace with BP readings
+#df = pd.DataFrame({'PPG': ppg_signal, 'SBP': sbp_signal})
+
+# Step 1: Detect peaks in PPG
+peaks, _ = find_peaks(df['PPG'], distance=50)  # adjust distance based on sampling rate
+
+# Step 2: Extract features per pulse
+features = []
+sbp_values = []
+
+for i in range(len(peaks) - 1):
+    start, end = peaks[i], peaks[i + 1]
+    pulse = df['PPG'].iloc[start:end].values
+    sbp = df['SBP'].iloc[start]  # align SBP with pulse start
+
+    if len(pulse) < 5:
+        continue
+
+    peak_amp = np.max(pulse)
+    pulse_width = end - start
+    rise_time = np.argmax(pulse)
+    auc = np.trapz(pulse)
+    slope = (pulse[rise_time] - pulse[0]) / rise_time if rise_time != 0 else 0
+
+    features.append([peak_amp, pulse_width, rise_time, auc, slope])
+    sbp_values.append(sbp)
+
+# Step 3: Fit regression model
+X = np.array(features)
+y = np.array(sbp_values)
+
+model = LinearRegression()
+model.fit(X, y)
+y_pred = model.predict(X)
+
+# Step 4: Print equation
+coeffs = model.coef_
+intercept = model.intercept_
+feature_names = ['PeakAmplitude', 'PulseWidth', 'RiseTime', 'AUC', 'Slope']
+
+print("Regression Equation:")
+eq = f"SBP = {intercept:.2f}"
+for name, coef in zip(feature_names, coeffs):
+    eq += f" + ({coef:.2f} × {name})"
+print(eq)
+
+# Step 5: Evaluate model
+r2 = r2_score(y, y_pred)
+mae = mean_absolute_error(y, y_pred)
+print(f"R² Score: {r2:.2f}")
+print(f"Mean Absolute Error: {mae:.2f} mmHg")
+
+# Step 6: Visualizations
+df_features = pd.DataFrame(X, columns=feature_names)
+df_features['SBP'] = y
+
+# Pairplot
+sns.pairplot(df_features)
+plt.suptitle('Feature Relationships', y=1.02)
+plt.show()
+
+# Correlation heatmap
+plt.figure(figsize=(8, 6))
+sns.heatmap(df_features.corr(), annot=True, cmap='coolwarm')
+plt.title('Feature Correlation Heatmap')
+plt.show()
+
+# Regression vs True SBP
+plt.figure(figsize=(10, 5))
+plt.scatter(y, y_pred, label='Predicted vs Actual')
+plt.plot([min(y), max(y)], [min(y), max(y)], 'r--', label='Ideal Fit')
+plt.xlabel('True SBP')
+plt.ylabel('Predicted SBP')
+plt.title('Regression Predictions vs True SBP')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# Error histogram
+errors = y - y_pred
+plt.figure(figsize=(8, 4))
+plt.hist(errors, bins=50, color='skyblue', edgecolor='black')
+plt.title('Prediction Error Distribution')
+plt.xlabel('Error (mmHg)')
+plt.ylabel('Frequency')
+plt.grid(True)
+plt.show()
