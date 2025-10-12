@@ -1,0 +1,174 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Oct 10 21:47:01 2025
+
+@author: sweth
+"""
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.signal import butter, filtfilt, find_peaks
+
+# -----------------------------------------------------
+# 1) SETTINGS
+# -----------------------------------------------------
+INPUT_FILE = "ppg_ir_400hz_180s.csv"   # raw IR only (or time_s,IR)
+FS = 400                               # Hz
+DURATION = 180.0                       # seconds
+WINDOW = 30.0                          # per-window seconds (→ 6 windows)
+
+# -----------------------------------------------------
+# 2) LOAD
+# -----------------------------------------------------
+df = pd.read_csv(INPUT_FILE)
+
+# Normalize headers
+cols = [c.strip().lower() for c in df.columns]
+df.columns = cols
+
+# Expect either: ["ir"] or ["time_s","ir"]
+if "ir" not in df.columns:
+    # if column is unnamed, treat first col as IR
+    df.columns = ["ir"] + list(df.columns[1:])
+
+ir = df["ir"].astype(float).values
+
+# Build time if missing
+if "time_s" in df.columns:
+    t = df["time_s"].astype(float).values
+else:
+    n = len(ir)
+    t = np.arange(n) / FS
+
+# Trim to exactly 0..180 s window (defensive)
+mask = (t >= 0.0) & (t <= DURATION)
+t = t[mask]
+ir = ir[mask]
+
+print(f"Loaded {len(ir)} samples "
+      f"(expected ~{int(FS*DURATION)}). Duration ≈ {t[-1]-t[0]:.2f}s")
+
+# -----------------------------------------------------
+# 3) PREPROCESS (band-pass, polarity)
+# -----------------------------------------------------
+def butter_bandpass(low, high, fs, order=4):
+    nyq = 0.5 * fs
+    return butter(order, [low/nyq, high/nyq], btype="band")
+
+# 0.5–5 Hz (≈30–300 BPM). For 400 Hz, this is fine.
+b, a = butter_bandpass(0.5, 5.0, FS, order=4)
+xf = filtfilt(b, a, ir)
+
+# Polarity: choose the orientation with stronger peaks
+pos_peaks, _ = find_peaks(xf, distance=int(0.3*FS))
+neg_peaks, _ = find_peaks(-xf, distance=int(0.3*FS))
+pos_mean = np.mean(xf[pos_peaks]) if len(pos_peaks) else -np.inf
+neg_mean = np.mean(-xf[neg_peaks]) if len(neg_peaks) else -np.inf
+y = -xf if neg_mean > pos_mean else xf
+
+# -----------------------------------------------------
+# 4) PEAKS → IBI CLEANING
+# -----------------------------------------------------
+def detect_peaks(sig, fs):
+    # adaptive prominence based on signal spread
+    prom = 0.4 * np.std(sig)
+    peaks, _ = find_peaks(sig, distance=int(0.3*fs), prominence=prom)
+    if len(peaks) < 10:
+        peaks, _ = find_peaks(sig, distance=int(0.3*fs),
+                              prominence=0.2*np.std(sig))
+    return peaks
+
+def clean_ibi(peak_times_s):
+    if len(peak_times_s) < 2:
+        return np.array([])
+    ibi = np.diff(peak_times_s)  # seconds
+    # Keep physiologic 0.3–2.0 s (~30–200 BPM)
+    ibi = ibi[(ibi > 0.3) & (ibi < 2.0)]
+    return ibi
+
+def hr_sdnn_from_peaks(peak_times_s):
+    ibi = clean_ibi(peak_times_s)
+    if len(ibi) < 2:
+        return np.nan, np.nan, len(ibi)
+    bpm_inst = 60.0 / ibi
+    sdnn_ms = np.std(ibi) * 1000.0
+    # sanity cap
+    if sdnn_ms > 300:
+        sdnn_ms = np.nan
+    return np.mean(bpm_inst), sdnn_ms, len(ibi)
+
+# Detect peaks once; we’ll window by time
+peaks_idx = detect_peaks(y, FS)
+peaks_t = t[peaks_idx]
+
+# -----------------------------------------------------
+# 5) PER-30s WINDOWS
+# -----------------------------------------------------
+rows = []
+num_windows = int(DURATION // WINDOW)
+for w in range(num_windows):
+    t0, t1 = w*WINDOW, (w+1)*WINDOW
+    mask = (peaks_t >= t0) & (peaks_t < t1)
+    hr, sdnn, n_ibi = hr_sdnn_from_peaks(peaks_t[mask])
+    rows.append({
+        "window_start_s": t0,
+        "window_end_s": t1,
+        "beats_used": n_ibi + 1 if n_ibi > 0 else 0,  # n beats = n_ibi + 1
+        "HR_BPM": None if np.isnan(hr) else round(hr, 1),
+        "SDNN_ms": None if np.isnan(sdnn) else round(sdnn, 2),
+    })
+    print(f"{t0:3.0f}-{t1:3.0f}s → HR={hr if not np.isnan(hr) else 'NaN'} "
+          f"BPM | SDNN={sdnn if not np.isnan(sdnn) else 'NaN'} ms | "
+          f"beats_used={rows[-1]['beats_used']}")
+
+perwin_df = pd.DataFrame(rows)
+
+# -----------------------------------------------------
+# 6) OVERALL METRICS
+# -----------------------------------------------------
+ibi_all = clean_ibi(peaks_t)
+if len(ibi_all) >= 2:
+    overall_hr = np.mean(60.0 / ibi_all)
+    overall_sdnn = np.std(ibi_all) * 1000.0
+    if overall_sdnn > 300:
+        overall_sdnn = np.nan
+    print("\n===== OVERALL (0–180 s) =====")
+    print(f"Mean HR     : {overall_hr:.1f} BPM")
+    print(f"SDNN        : {overall_sdnn if not np.isnan(overall_sdnn) else 'NaN'} ms")
+else:
+    overall_hr, overall_sdnn = np.nan, np.nan
+    print("\n⚠️ Not enough clean beats for overall HRV.")
+
+# Save summary CSV
+summary = perwin_df.copy()
+summary.loc[len(summary)] = {
+    "window_start_s": 0.0,
+    "window_end_s": DURATION,
+    "beats_used": (len(ibi_all)+1) if len(ibi_all) > 0 else 0,
+    "HR_BPM": None if np.isnan(overall_hr) else round(overall_hr, 1),
+    "SDNN_ms": None if np.isnan(overall_sdnn) else round(overall_sdnn, 2),
+}
+summary.to_csv("ppg_hr_sdnn_30s_and_overall.csv", index=False)
+print("\n💾 Saved: ppg_hr_sdnn_30s_and_overall.csv")
+
+# -----------------------------------------------------
+#7) PLOTS 
+# -----------------------------------------------------
+# Raw vs time (downsampled for speed)
+ds = max(1, len(t)//10000)
+plt.figure(figsize=(10,3.2))
+plt.plot(t[::ds], ir[::ds], alpha=0.8)
+plt.xlabel("Time (s)"); plt.ylabel("IR (a.u.)")
+plt.title("Raw IR (downsampled view)")
+plt.grid(True); plt.tight_layout(); plt.show()
+
+# Filtered + peaks (last 30 s)
+plt.figure(figsize=(10,3.2))
+mask10 = (t >= 150) & (t <= 180)
+plt.plot(t[mask10], y[mask10], label="Band-passed")
+p10 = peaks_t[(peaks_t >= 150) & (peaks_t <= 180)]
+plt.plot(p10, np.interp(p10, t, y), "o", label="Peaks")
+plt.xlabel("Time (s)"); plt.ylabel("Amp (a.u.)")
+plt.title("Filtered PPG (150–180 s) with peaks")
+plt.legend(); plt.grid(True); plt.tight_layout(); plt.show()
