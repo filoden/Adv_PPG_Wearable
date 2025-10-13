@@ -1,0 +1,79 @@
+% Determination of Settings: Iteration #3
+% Last updated 10/12/25
+%% Test Run of file ending in 2.txt
+% Load the file
+lines = readlines('PulsewaveSettingsTestRuns-10-12-25-2.txt');
+
+% Initialize containers
+ppg = {}; % Cell array to store waveform data BLOCKS
+settingsBlocks = {}; % Cell array to store corresponding meatadata
+currentSettings = ""; % Temporary string to accumulate metadata
+currentData = []; % Temporary MATRIX to accumulate WAVEFORM data
+readingWaveform = false;
+headerSkipped = false;
+
+for i = 1:length(lines)
+    line = strtrim(lines(i));
+
+    % Detect start of  metadata block
+    if contains(lower(line), "**begin metadata**")
+        if ~isempty(currentData)
+            ppg{end + 1} = currentData;
+            settingsBlocks{end + 1} = currentSettings;
+            currentData = [];
+            currentSettings = "";
+        end
+        readingWaveform = false;
+        continue;
+
+    % Detect start of waveform block
+    elseif contains(lower(line), '**begin waveform**')
+        readingWaveform = true;
+        headerSkipped = false;
+        continue;
+
+    % Collect metadadta lines
+    elseif ~readingWaveform && contains(line,':') && ~contains(line, ',')
+        currentSettings = currentSettings + newline + line;
+
+    % Skipping waveform headers
+    elseif readingWaveform && ~headerSkipped && contains(lower(line), 'time') && contains(lower(line),'waveform')
+        headerSkipped = true;
+        continue;
+    
+    % Parse waveform data
+    elseif readingWaveform && ~isempty(line)
+        nums = sscanf(line, '%f,%f');
+        if numel(nums) == 2
+            currentData(end + 1, :) = nums';
+        end
+    end
+end
+
+% Save final block
+if ~isempty(currentData)
+    ppg{end + 1} = currentData;
+    settingsBlocks{end + 1} = currentSettings;
+end
+
+% Plot each block
+for i = 1:length(ppg)
+    time_raw = ppg{i}(:,1);           % Original time values
+    time_sec = (time_raw - time_raw(1)) * 0.0001;  % Shift to start at 0 and convert to second
+    waveform = ppg{i}(:,2);
+
+    filter = lowpass(waveform,10000/5,10000);
+
+    figure;
+    plot(time_sec, waveform, 'b', 'DisplayName','Original');
+    hold on
+    plot(time_sec, filter,'r','DisplayName','Filtered')
+    title(['Run ', num2str(i)]);
+    xlabel('Time (seconds)');
+    ylabel('Waveform');
+    legend
+    grid on;
+   
+    % Display settings in command window
+    fprintf('\nRun %d Settings:\n%s\n', i, settingsBlocks{i});
+end
