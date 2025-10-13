@@ -27,7 +27,7 @@ Instruction for Usage:
     The filename must either be in the current working directory or be a full path.
 
     An example is given:
-    python Python_Preprocessing\parse_waveform.py   Signal-Processing\Test_Data\Raw_CSVs\PulsewaveSettingsTestRuns-10-12-25-3.txt --out .\Signal-Processing\Test_Data\Parsed_CSVs\10-12-25-3
+    python Python_Preprocessing\parse_waveform.py   Python_Preprocessing\Test_Data\Raw_CSVs\PulsewaveSettingsTestRuns-10-12-25-3.txt --out .\Python_Preprocessing\Test_Data\Parsed_CSVs\10-12-25-3
 
 """
 
