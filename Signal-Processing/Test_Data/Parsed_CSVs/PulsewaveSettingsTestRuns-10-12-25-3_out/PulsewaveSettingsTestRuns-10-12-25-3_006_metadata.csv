@@ -1,0 +1,9 @@
+key,value
+Run_ID,0
+Brightness,220
+Sample_Average,1
+Led_Mode,2
+Sample_Rate,200
+Pulse_Width,118
+ADC_range,16384
+saturation_detected,0
