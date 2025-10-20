@@ -1,7 +1,6 @@
 #ifndef PPGHANDLER_H
 #define PPGHANDLER_H
 
-#include <string>
 #include <Arduino.h>
 #include <stdint.h>
 

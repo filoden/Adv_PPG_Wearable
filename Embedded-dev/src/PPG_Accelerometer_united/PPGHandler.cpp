@@ -3,13 +3,12 @@
 int x = 0;
 int secondsperphase = 5;
 MAX30105 particleSensor;
+extern volatile uint8_t interrupt;
 
 // Constructor
 waveformPkg::waveformPkg(){
-    //LOG("Allocating new node ->");
     startNode = new waveNode;
     realTime = currentTime();
-    //LOG(" done.");
     if (startNode == NULL){
         LOGERR("Fatal: unable to allocate start node\n");
         exit(-1);
@@ -23,15 +22,11 @@ waveformPkg::waveformPkg(){
 
 void waveformPkg::enqueue(u16 waveIn){
     u32 timeIn = currentTime() - realTime;
-    //LOG("Enqueue Length: ");
-    //LOGLN(currentNode->length);
     if (noEntryCnt<10){ // prevents the first 10 entries from being logged
         noEntryCnt++;
     }
     else if (isFull()){
-        //LOG("Allocating new node ->");
         currentNode->next = new waveNode;
-        //LOGLN(" done.");
         if (currentNode->next == NULL){
             LOGERR("Fatal: unable to allocate start node\n");
             exit(-1);
@@ -58,11 +53,18 @@ void waveformPkg::enqueue(u16 waveIn){
 
 // Destructor
 waveformPkg::~waveformPkg(){
+    int x = 1;
     while (startNode != NULL){
-        waveNode* tempNode = startNode;
-        startNode = startNode->next;
-        delete tempNode;
+        waveNode* tempNode = startNode->next;
+        delete startNode;
+        startNode = tempNode;
+        delay(100);
     }
+    delay(100);currentNode = NULL; // this pointer is set to the current node 
+    wavePtr = NULL;
+    timePtr = NULL;;
+    cursor = 0;
+    noEntryCnt = 0;
 }
 
 wavelet waveformPkg::peek(){
@@ -108,7 +110,6 @@ wavelet waveformPkg::dequeue(){
     }
     if (startNode != NULL){
         wavelet item;
-        
         //LOGLN();
         //LOG("  Cursor: ");
         //LOGLN(cursor);
@@ -181,21 +182,53 @@ void waveformPkg::printInternals(){
     Serial.println("**Begin Waveform**");
 }
 
-// Global instance and testRun
-waveformPkg pk1;
+void waveformPkg::makeEmpty(){ // essentially a copy of destructor which retains the startNode
+    int x = 1;
+    delay(100);
+    while (startNode->next != NULL){
+        Serial.print(x++);
+        waveNode* tempNode = startNode->next;
+        delete startNode;
+        startNode = tempNode;
+        delay(100);
+    }
+    startNode->length = 0;
+    delay(100);
+    currentNode = NULL; 
+    wavePtr = NULL;
+    timePtr = NULL;;
+    cursor = 0;
+    noEntryCnt = 0;
+}
 
-void testRun(u16 br, u8 sAve, u8 mode, u16 rate, u16 pWidth, u16 range, u8 time){
+// Global instance and testRun
+
+int testRun(u16 br, u8 sAve, u8 mode, u16 rate, u16 pWidth, u16 range, u8 time){
+    waveformPkg pk1 = *(new waveformPkg);
     pk1.setInternals(br, sAve, mode, rate, pWidth, range);
     particleSensor.setup(br, sAve, mode, rate, pWidth, range);
     u32 startTime = millis();
+    bool failure = false;
     while (millis()-startTime < time*1000){
         u16 in = u16(particleSensor.getIR());
         pk1.enqueue(in);
+        if (interrupt == 1){
+            interrupt = 0;
+            failure = true;
+            delay(1000);
+            break;
+        }
     }
-    analogWrite(LED_BLUE, 0xaf);
-    delay(200);
-    pk1.dequeueToCSV();
-    analogWrite(LED_BLUE, 0xff);
-    return;
+    
+    if (!(failure)){
+        pk1.dequeueToCSV();
+        return 1;
+    }
+    else {
+        return 0;
+    }    
+}
 
+int standardRun(){
+    return testRun(BRIGHTNESS, SAMPLEAVE, LEDMODE, SAMPLERATE, PULSEWIDTH, ADCRANGE, TIME);
 }
