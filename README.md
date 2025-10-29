@@ -68,31 +68,26 @@ This repository contains:
 ---
 ## Repository Layout
 ```
-firmware/
-  SystemShared.h
-  SystemShared.cpp
-  PPGHandler.h
-  PPGHandler.cpp
-  AccHandler.h
-  AccHandler.cpp
-  parent/              # Parent sketch (defines ROLE_PARENT)
-    parent.ino
-  child/               # Child sketch  (defines ROLE_CHILD)
-    child.ino
-processing/
-  python/
-    notebooks/
-    analyze_ppg.py
-  matlab/
-    import_ppg.m
-    preprocess_ppg.m
-    analyze_ppg.m
-docs/
-  SDS/
-    SDS.pdf
-    appendix/
+Embedded-dev/
+  src/
+    IncludeFiles/
+      Helpers.h  
+      Helpers.cpp
+      PPGHandler.h
+      PPGHandler.cpp
+      AccHandler.h
+      AccHandler.cpp
+  ArduinoMains/              
+    PPG_Wearable_Parent.ino # Parent sketch (defines ROLE_PARENT)
+    PPG_Wearable_Child.ino # Child sketch  (defines ROLE_CHILD)
+  Deprecated_Versions/
+Signal-Processing/
+Python_Preprocessing/
+  Test_Data/
+parse_waveform.py
+
 ```
-> If names differ locally, keep this structure conceptually (shared firmware core + role sketches + processing + docs).
+
 
 ---
 ## Hardware
