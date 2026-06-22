@@ -38,7 +38,7 @@ This repository contains:
 ### Roles
 **Parent**
 - Drives the sync pulse.
-- Waits for a single tap to start measuring.
+- Waits for a single tap from the user to start measuring. (detected via accelerometer)
 - Captures a segment and exports CSV with *local* timestamps.
 
 **Child**
