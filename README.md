@@ -1,6 +1,6 @@
 # PPG Sensor Platform
 
-End-to-end firmware and analysis toolkit for photoplethysmography (PPG) using a MAX30105 sensor, an LIS3DH accelerometer, and a Parent/Child two-node design.
+Firmware and analysis toolkit for photoplethysmography (PPG) using a MAX30105 sensor, an LIS3DH accelerometer, with a Parent/Child design.
 
 This repository contains:
 - Firmware (Arduino/C++) for both Parent and Child devices, built from a shared codebase.
