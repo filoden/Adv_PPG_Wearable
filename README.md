@@ -148,10 +148,6 @@ inline unsigned long currentTime(){ return (MICROS() + 50u) / 100u; }
    ```
 3. Select the board/port, install dependencies, and Upload.
 
-**PlatformIO**
-- Create two environments (`parent`, `child`) with:
-  - `build_flags = -DROLE_PARENT` (or `-DROLE_CHILD`)
-  - `lib_deps` for the sensor libraries listed above.
 
 ### Run Sequence
 
@@ -251,16 +247,10 @@ plot(T.t_s, T.Waveform); xlabel('Time (s)'); ylabel('Amplitude'); title('PPG IR'
 
 ---
 ## Troubleshooting & Notes
-- **INT1 latch clearing (LIS3DH):** In tap modes the INT1 line is latched. Clear after the ISR by reading `CLICK_SRC`. For latched AOI motion routes, read `INT1_SRC`. Ensure the main loop reads the appropriate source after handling the interrupt flag.
-- **Time wrap:** `micros()` wraps. Using 0.1 ms ticks reduces the rate, but you should compute differences robustly or keep runs well within the wrap interval.
-- **Arduino `String`:** Can fragment heap on small MCUs. For large CSV dumps, prefer fixed-size buffers and `Serial.write()`.
 - **Known cleanups (tracked):**
   - Replace any `pk1 = *(new waveformPkg);` pattern (leaks) with a stack object or placement new.
   - Make `dequeueToCSV()` print per-row (avoid cumulative `String` growth).
 
----
-## License
-Add your license (e.g., MIT) and include a `LICENSE` file at the repo root.
 
 ---
 Questions or improvements? Open an issue with your board, core version, library versions, and a short log excerpt (metadata header + first ~20 waveform rows) so we can reproduce quickly.
