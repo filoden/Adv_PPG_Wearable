@@ -2,8 +2,10 @@
 
 Firmware and analysis toolkit for photoplethysmography (PPG) using a MAX30105 sensor, an LIS3DH accelerometer, with a Parent/Child design.
 
+### Important Note: Most code and certain documentation related to this design is not currently available due to patent application. Certain documents referenced in this readme may not be present.
+
 This repository contains:
-- Firmware (Arduino/C++) for both Parent and Child devices, built from a shared codebase.
+- Firmware  (Arduino/C++) for both Parent and Child devices, built from a shared codebase.
 - Signal processing (MATLAB and Python) to turn raw IR samples into usable features and plots.
 - Design documents (SDS and appendix listings) describing architecture, timing, and the exported data format.
 
